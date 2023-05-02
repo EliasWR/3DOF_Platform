@@ -50,8 +50,8 @@ For running both programs simultaneously we can use multithreading or multiproce
 """
 
 # PHYSICAL CONSTANTS
-L = 30  # Distance between two servos
-r = 10  # Length of servo shaft
+L = 220  # Distance between two servos
+r = 200  # Length of servo shaft
 s = 15  # Length of actuator leg
 d = 0   # Offset in Y direction
 
@@ -197,15 +197,22 @@ def servo_control(key2, queue):
             z_S2 = (math.sqrt(3)*L/6 + d)*math.sin(pitch_angle)*math.cos(roll_angle) - L/2*math.sin(roll_angle)
             z_S3 = (math.sqrt(3)*L/6 + d)*math.sin(pitch_angle)*math.cos(roll_angle) + L/2*math.sin(roll_angle)
 
-            z_S1 = 0
-            z_S2 = 0
-            z_S3 = 0
+            print(f'Z-values are: [{z_S1}, {z_S2}, {z_S3}]')
+
+            #z_S1 = 0
+            #z_S2 = 0
+            #z_S3 = 0
 
             #Approximate each servo angle based on the calculated z-offset
             global r
+
             ang1 = math.asin(z_S1/r)
             ang2 = math.asin(z_S2/r)
             ang3 = math.asin(z_S3/r)
+
+            ang1 = math.degrees(ang1)
+            ang2 = math.degrees(ang2)
+            ang3 = math.degrees(ang3)
 
             ang1 = limit(ang1, servo1_angle_limit_negative, servo1_angle_limit_positive)
             ang2 = limit(ang2, servo2_angle_limit_negative, servo2_angle_limit_positive)

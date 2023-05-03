@@ -6,7 +6,6 @@ from cvzone.ColorModule import ColorFinder
 import cv2
 import serial
 import math
-from tkinter import *
 import time
 
 
@@ -125,6 +124,8 @@ def ball_track(key1, queue):
 
 
     while True:
+        start_time = time.time() # start recording the cycle time
+
         get, img = cap.read()
 
         center = (center_point[0], center_point[1])
@@ -154,6 +155,11 @@ def ball_track(key1, queue):
         imgStack = cvzone.stackImages([imgContour], 1, 1)
         # imgStack = cvzone.stackImages([img,imgColor, mask, imgContour],2,0.5) #use for calibration and correction
         cv2.imshow("Image", imgStack)
+
+        end_time = time.time() # stop recording the cycle time
+        cycle_time = end_time - start_time # calculate the cycle time
+        print(f"Ball tracking cycle time: {cycle_time} seconds") # print the cycle time
+
         cv2.waitKey(1)
 
 
@@ -253,7 +259,11 @@ def servo_control(key2, queue):
 
 
     while key2:
+        start_time = time.time()
         writeCoord()
+        end_time = time.time() # stop recording the cycle time
+        cycle_time = end_time - start_time # calculate the cycle time
+        print(f"Servo cycle time: {cycle_time} seconds") # print the cycle time
 
     
     #root.mainloop()  # running loop

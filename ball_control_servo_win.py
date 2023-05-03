@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import numpy as np
 from multiprocessing import Queue
 import cvzone
 from cvzone.ColorModule import ColorFinder
@@ -51,7 +52,7 @@ For running both programs simultaneously we can use multithreading or multiproce
 
 # PHYSICAL CONSTANTS
 L = 220  # Distance between two servos
-r = 200  # Length of servo shaft
+r = 40  # Length of servo shaft
 s = 15  # Length of actuator leg
 d = 0   # Offset in Y direction
 
@@ -67,20 +68,20 @@ all_angle = 0
 platform_roll_angle = 0
 platform_pitch_angle = 0
 
-PLATFORM_ROLL_LOW_LIM = -15
-PLATFORM_ROLL_HIGH_LIM = 15
-PLATFORM_PITCH_LOW_LIM = -15
-PLATFORM_PITCH_HIGH_LIM = 15
+PLATFORM_ROLL_LOW_LIM = -10
+PLATFORM_ROLL_HIGH_LIM = 10
+PLATFORM_PITCH_LOW_LIM = -10
+PLATFORM_PITCH_HIGH_LIM = 10
 
 # Set a limit to upto which you want to rotate the servos (You can do it according to your needs)
-servo1_angle_limit_positive = 90
-servo1_angle_limit_negative = -90
+servo1_angle_limit_positive = 10
+servo1_angle_limit_negative = -70
 
-servo2_angle_limit_positive = 90
-servo2_angle_limit_negative = -90
+servo2_angle_limit_positive = 10
+servo2_angle_limit_negative = -70
 
-servo3_angle_limit_positive = 90
-servo3_angle_limit_negative = -90
+servo3_angle_limit_positive = 10
+servo3_angle_limit_negative = -70
 
 Kp = 1
 Ki = 0
@@ -125,8 +126,18 @@ def ball_track(key1, queue):
 
     while True:
         get, img = cap.read()
-        imgColor, mask = myColorFinder.update(img, hsvVals)
-        imgContour, countours = cvzone.findContours(img, mask)
+
+        center = (center_point[0], center_point[1])
+        radius = 300
+
+        mask = np.zeros_like(img)
+        cv2.circle(mask, center, radius, (255, 255, 255), -1)
+
+        masked_img = cv2.bitwise_and(img, mask)
+
+        imgColor, mask = myColorFinder.update(masked_img, hsvVals)
+
+        imgContour, countours = cvzone.findContours(masked_img, mask)
 
         if countours:
 
@@ -147,8 +158,8 @@ def ball_track(key1, queue):
 
 
 def servo_control(key2, queue):
-    #port_id = 'COM7'
-    port_id = '/dev/cu.usbmodem11101'
+    port_id = 'COM7'        
+    #port_id = '/dev/cu.usbmodem11101'
     # initialise serial interface
     arduino = serial.Serial(port=port_id, baudrate=250000, timeout=0.1)
     if key2:
@@ -184,8 +195,8 @@ def servo_control(key2, queue):
             roll_angle = limit(roll_angle, PLATFORM_ROLL_LOW_LIM, PLATFORM_ROLL_HIGH_LIM)
             pitch_angle = limit(pitch_angle, PLATFORM_PITCH_LOW_LIM, PLATFORM_PITCH_HIGH_LIM)
 
-            roll_angle = math.radians(roll_angle)
-            pitch_angle = math.radians(pitch_angle)
+            roll_angle = -math.radians(roll_angle)
+            pitch_angle = -math.radians(pitch_angle)
 
 
             # For using the GUI angles
@@ -199,9 +210,9 @@ def servo_control(key2, queue):
             # Calculate Z-position for each servo.
             # The z-value is all we need to find a good enough approximations for the angle of the servo
             global L, d
-            z_S1 = (math.sqrt(3)*L/6 + d)*math.sin(pitch_angle)*math.cos(roll_angle) + L/2*math.sin(roll_angle)
-            z_S2 = (math.sqrt(3)*L/6 + d)*math.sin(pitch_angle)*math.cos(roll_angle) - L/2*math.sin(roll_angle)
-            z_S3 = (math.sqrt(3)*L/6 + d)*math.sin(pitch_angle)*math.cos(roll_angle) + L/2*math.sin(roll_angle)
+            z_S1 = ((math.sqrt(3)*L/6 + d)*math.sin(pitch_angle)*math.cos(roll_angle) + L/2*math.sin(roll_angle))
+            z_S2 = ((math.sqrt(3)*L/6 + d)*math.sin(pitch_angle)*math.cos(roll_angle) - L/2*math.sin(roll_angle))
+            z_S3 = ((-math.sqrt(3)*L/3 + d)*math.sin(pitch_angle)*math.cos(roll_angle))
 
             print(f'Z-values are: [{z_S1}, {z_S2}, {z_S3}]')
 
@@ -240,54 +251,9 @@ def servo_control(key2, queue):
         write_arduino(str(angles))
 
 
-    def toggle_gui_angles():
-        global use_gui_angles
-
-        if use_gui_angles:
-            btn_use_GUI.config(text="Gui is off")
-            use_gui_angles = False
-        else:
-            btn_use_GUI.config(text="Gui is on")
-            use_gui_angles = True
-        
-
-    
-
-
-    root = Tk()
-    root.resizable(0, 0)
-
-    w2 = Label(root, justify=LEFT, text="Simple Servo Controller")
-    w2.config(font=("Elephant", 30))
-    w2.grid(row=3, column=0, columnspan=2, padx=100)
-
-    S1Lb = Label(root, text="Platform Roll Angle")
-    S1Lb.config(font=("Elephant", 15))
-    S1Lb.grid(row=5, column=0, pady=10)
-
-    S2Lb = Label(root, text="Platform Pitch Angle")
-    S2Lb.config(font=("Elephant", 15))
-    S2Lb.grid(row=10, column=0, pady=10)
-
-
-
-
-    servo1 = Scale(root, from_=PLATFORM_ROLL_LOW_LIM, to=PLATFORM_ROLL_HIGH_LIM, orient=HORIZONTAL,
-                   resolution=1.0, length=400, variable=platform_roll_angle)
-    servo1.grid(row=5, column=1)
-
-    servo2 = Scale(root, from_=PLATFORM_PITCH_LOW_LIM, to=PLATFORM_PITCH_HIGH_LIM, orient=HORIZONTAL,
-                   resolution=1.0, length=400, variable=platform_pitch_angle)
-    servo2.grid(row=10, column=1)
-
-    btn_use_GUI = Button(root, command=toggle_gui_angles, text="GUI is off")
-    btn_use_GUI.grid(row= 20, column=1)
-
 
     while key2:
         writeCoord()
-        root.update_idletasks()
-        root.update()
 
     
     #root.mainloop()  # running loop

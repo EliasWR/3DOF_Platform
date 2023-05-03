@@ -238,7 +238,6 @@ def servo_control(key2, queue):
 
             all_angle_assign(ang1, ang2, ang3)
         
-
     def write_arduino(data):
         print('The angles send to the arduino : ', data)
 
@@ -249,7 +248,7 @@ def servo_control(key2, queue):
         ang2 = servo2_angle
         ang3 = servo3_angle
 
-        angles: tuple = (round(math.degrees(ang1), 1),
+        : tuple = (round(math.degrees(ang1), 1),
                          round(math.degrees(ang2), 1),
                          round(math.degrees(ang3), 1))
 

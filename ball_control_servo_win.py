@@ -175,11 +175,16 @@ def servo_control(key2, queue):
             print(f'The position of the ball : [{corrd_info[0]}, {corrd_info[1]}]')
 
             # PID
+
+
             roll_angle = PID_roll.update(corrd_info[0])
             pitch_angle = PID_pitch.update(corrd_info[1])
 
             roll_angle = limit(roll_angle, PLATFORM_ROLL_LOW_LIM, PLATFORM_ROLL_HIGH_LIM)
             pitch_angle = limit(pitch_angle, PLATFORM_PITCH_LOW_LIM, PLATFORM_PITCH_HIGH_LIM)
+
+            roll_angle = math.radians(roll_angle)
+            pitch_angle = math.radians(pitch_angle)
 
 
             # For using the GUI angles
@@ -199,13 +204,9 @@ def servo_control(key2, queue):
 
             print(f'Z-values are: [{z_S1}, {z_S2}, {z_S3}]')
 
-            #z_S1 = 0
-            #z_S2 = 0
-            #z_S3 = 0
 
             #Approximate each servo angle based on the calculated z-offset
             global r
-
             ang1 = math.asin(z_S1/r)
             ang2 = math.asin(z_S2/r)
             ang3 = math.asin(z_S3/r)

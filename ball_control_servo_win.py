@@ -67,10 +67,10 @@ all_angle = 0
 platform_roll_angle = 0
 platform_pitch_angle = 0
 
-PLATFORM_ROLL_LOW_LIM = -10
-PLATFORM_ROLL_HIGH_LIM = 10
-PLATFORM_PITCH_LOW_LIM = -10
-PLATFORM_PITCH_HIGH_LIM = 10
+PLATFORM_ROLL_LOW_LIM = -13
+PLATFORM_ROLL_HIGH_LIM = 13
+PLATFORM_PITCH_LOW_LIM = -13
+PLATFORM_PITCH_HIGH_LIM = 13
 
 # Set a limit to upto which you want to rotate the servos (You can do it according to your needs)
 servo1_angle_limit_positive = 10
@@ -82,9 +82,9 @@ servo2_angle_limit_negative = -70
 servo3_angle_limit_positive = 10
 servo3_angle_limit_negative = -70
 
-Kp = 1
+Kp = 6
 Ki = 0
-Kd = 0
+Kd = 0.1
 
 PID_servo1 = PID(Kp, Ki, Kd)
 PID_servo2 = PID(Kp, Ki, Kd)
@@ -107,11 +107,12 @@ def limit(in_val, min, max):
 def ball_track(key1, queue):
     camera_port = 0
     cap = cv2.VideoCapture(camera_port,cv2.CAP_DSHOW)
-    cap.set(3, 1280)
-    cap.set(4, 720)
+    h = 720
+    w = 1280
 
-    get, img = cap.read()
-    h, w, _ = img.shape
+    cap.set(3, w)
+    cap.set(4, h)
+
 
     if key1:
         print('Ball tracking is initiated')
@@ -122,14 +123,17 @@ def ball_track(key1, queue):
 
     center_point = [626, 337, 2210] # center point of the plate, calibrated
 
+    center = (center_point[0], center_point[1])
+    radius = 300
+
+    angle = 5  # Specify the angle of rotation in degrees
+
+    # Define the rotation matrix
+    M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1)
 
     while True:
-        start_time = time.time() # start recording the cycle time
-
         get, img = cap.read()
-
-        center = (center_point[0], center_point[1])
-        radius = 300
+        img = cv2.warpAffine(img, M, (w, h))
 
         mask = np.zeros_like(img)
         cv2.circle(mask, center, radius, (255, 255, 255), -1)
@@ -156,10 +160,6 @@ def ball_track(key1, queue):
         # imgStack = cvzone.stackImages([img,imgColor, mask, imgContour],2,0.5) #use for calibration and correction
         cv2.imshow("Image", imgStack)
 
-        end_time = time.time() # stop recording the cycle time
-        cycle_time = end_time - start_time # calculate the cycle time
-        print(f"Ball tracking cycle time: {cycle_time} seconds") # print the cycle time
-
         cv2.waitKey(1)
 
 
@@ -185,12 +185,17 @@ def servo_control(key2, queue):
         """
         Here in this function we get both coordinate and servo control, it is an ideal place to implement the controller
         """
+
+
         corrd_info = queue.get()
+        print(corrd_info)
+
 
         if corrd_info == 'nil': # Checks if the output is nil
             print('Cannot find the ball :(')
+            #None == None
         else:
-            print(f'The position of the ball : [{corrd_info[0]}, {corrd_info[1]}]')
+            #print(f'The position of the ball : [{corrd_info[0]}, {corrd_info[1]}]')
 
             # PID
 
@@ -210,7 +215,7 @@ def servo_control(key2, queue):
                 roll_angle = platform_roll_angle
                 pitch_angle = platform_pitch_angle
 
-            print(f'Platform angles are : [{roll_angle}, {pitch_angle}]')
+            print(f'Platform: [{roll_angle}, {pitch_angle}]')
             
 
             # Calculate Z-position for each servo.
@@ -220,7 +225,7 @@ def servo_control(key2, queue):
             z_S2 = ((math.sqrt(3)*L/6 + d)*math.sin(pitch_angle)*math.cos(roll_angle) - L/2*math.sin(roll_angle))
             z_S3 = ((-math.sqrt(3)*L/3 + d)*math.sin(pitch_angle)*math.cos(roll_angle))
 
-            print(f'Z-values are: [{z_S1}, {z_S2}, {z_S3}]')
+            print(f'Z-values: [{z_S1}, {z_S2}, {z_S3}]')
 
 
             #Approximate each servo angle based on the calculated z-offset
@@ -241,7 +246,7 @@ def servo_control(key2, queue):
         
 
     def write_arduino(data):
-        print('The angles send to the arduino : ', data)
+        print('Servo angles: ', data)
 
         arduino.write(bytes(data, 'utf-8'))
 
@@ -259,11 +264,7 @@ def servo_control(key2, queue):
 
 
     while key2:
-        start_time = time.time()
         writeCoord()
-        end_time = time.time() # stop recording the cycle time
-        cycle_time = end_time - start_time # calculate the cycle time
-        print(f"Servo cycle time: {cycle_time} seconds") # print the cycle time
 
     
     #root.mainloop()  # running loop
@@ -279,3 +280,8 @@ if __name__ == '__main__':
     p2.start()
     p1.join()
     p2.join()
+
+
+# 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
+
+# Write some coordinates to a queue in one thread, and read the same data in another thread

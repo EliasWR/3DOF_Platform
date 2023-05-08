@@ -248,10 +248,10 @@ def servo_control(key2, queue):
         ang2 = servo2_angle
         ang3 = servo3_angle
 
-        : tuple = (round(math.degrees(ang1), 1),
+        angles: tuple = (round(math.degrees(ang1), 1),
                          round(math.degrees(ang2), 1),
                          round(math.degrees(ang3), 1))
-
+        
         write_arduino(str(angles))
 
 

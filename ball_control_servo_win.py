@@ -8,17 +8,9 @@ import serial
 import math
 import time
 
-A = np.array([[0, 1, 0, 0],
-              [0, 0, 0, 0],
-              [0, 0, 0, 1],
-              [0, 0, 0, 0]])
 
-B = np.array([[0],
-              [7],
-              [0],
-              [7]])
-
-prev_time = 0
+prev_time = time.time()
+prev_time_cv = time.time()
 phat_x_prev = 0
 vhat_x_prev = 0
 phat_y_prev = 0
@@ -33,8 +25,8 @@ y_ref = 0
 # Controller gains
 L1 = 11.8
 L2 = -100
-K1 = 14.28
-K2 = 1.68
+K1 = 0.01
+K2 = 0.2
 
 class PID():
 
@@ -133,9 +125,14 @@ def limit(in_val, min, max):
 def ball_track(key1, queue):
     camera_port = 0
     cap = cv2.VideoCapture(camera_port,cv2.CAP_DSHOW)
-    cap.set(3, 1280)
-    cap.set(4, 720)
+    w = 1280
+    h = 720
 
+    global prev_time_cv
+    
+
+    cap.set(3, w)
+    cap.set(4, h)
 
     if key1:
         print('Ball tracking is initiated')
@@ -155,6 +152,10 @@ def ball_track(key1, queue):
     M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1)
 
     while True:
+        current_time_cv = time.time()
+        delta_t = current_time_cv - prev_time_cv
+        prev_time_cv = current_time_cv
+        print(delta_t)
         get, img = cap.read()
         img = cv2.warpAffine(img, M, (w, h))
 
@@ -168,11 +169,11 @@ def ball_track(key1, queue):
         imgContour, countours = cvzone.findContours(masked_img, mask)
 
         if countours:
-            '''
+            
             data = round((countours[0]['center'][0] - center_point[0]) / 10), \
                    round((h - countours[0]['center'][1] - center_point[1]) / 10), \
                    round(int(countours[0]['area'] - center_point[2])/100)
-            '''
+            
 
             '''
             # Times 0.5 to go from pixels to mm
@@ -190,12 +191,14 @@ def ball_track(key1, queue):
         # imgStack = cvzone.stackImages([img,imgColor, mask, imgContour],2,0.5) #use for calibration and correction
         cv2.imshow("Image", imgStack)
 
+
+
         cv2.waitKey(1)
 
 
 def servo_control(key2, queue):
-    #port_id = 'COM7'        
-    port_id = '/dev/cu.usbmodem1101'
+    port_id = 'COM7'        
+    #port_id = '/dev/cu.usbmodem1101'
     # initialise serial interface
     arduino = serial.Serial(port=port_id, baudrate=115200, timeout=0.1)
     if key2:
@@ -262,27 +265,28 @@ def servo_control(key2, queue):
             a_x = 7*u_r_prev
             a_y = 7*u_p_prev
             phat_x = phat_x_prev + delta_t*(vhat_x_prev) + L1*(p_x_prev - phat_x_prev)
-            vhat_x = vhat_x_prev + delta_t*(a_x) + L2*(p_x_prev - phat_x_prev)
+            #vhat_x = vhat_x_prev + delta_t*(a_x) + L2*(p_x_prev - phat_x_prev)
             phat_y = phat_y_prev + delta_t*(vhat_y_prev) + L1*(p_y_prev - phat_y_prev)
-            vhat_y = vhat_y_prev + delta_t*(a_y) + L2*(p_y_prev - phat_y_prev)
+            #vhat_y = vhat_y_prev + delta_t*(a_y) + L2*(p_y_prev - phat_y_prev)
 
 
             print(p_x, p_y)
 
             #'''----------
             # High pass (Oppgave 3B)
-            f_c = 10 # hz
+            f_c = 1.5 # hz
             T = 1/(2*math.pi*f_c)
             vhat_x = (1- delta_t/T)*vhat_x_prev + (p_x - p_x_prev)/T
             vhat_y = (1- delta_t/T)*vhat_y_prev + (p_y - p_y_prev)/T
             #-----------'''
 
 
-            '''
+            
             # Vei-fart-tid (Oppgave 3A) 
-            vhat_x = (p_x - p_x_prev)/delta_t
-            vhat_y = (p_y - p_y_prev)/delta_t
-            '''
+            # vhat_x = (p_x - p_x_prev)/delta_t
+            # vhat_y = (p_y - p_y_prev)/delta_t
+            
+
             print(phat_x, vhat_x, phat_y, vhat_y)
 
             # Calculate the control input using the LQR controller
@@ -291,8 +295,8 @@ def servo_control(key2, queue):
             print(f"Raw u: {u_r}, {u_p}")
 
                     
-            roll_angle = math.degrees(u_r)
-            pitch_angle = math.degrees(u_p)
+            roll_angle = u_r#math.degrees(u_r)
+            pitch_angle = u_p#math.degrees(u_p)
 
             roll_angle = limit(roll_angle, PLATFORM_ROLL_LOW_LIM, PLATFORM_ROLL_HIGH_LIM)
             pitch_angle = limit(pitch_angle, PLATFORM_PITCH_LOW_LIM, PLATFORM_PITCH_HIGH_LIM)
@@ -314,9 +318,7 @@ def servo_control(key2, queue):
             p_y_prev = p_y
             prev_time = current_time
 
-
-
-            
+   
             
 
             # Calculate Z-position for each servo.

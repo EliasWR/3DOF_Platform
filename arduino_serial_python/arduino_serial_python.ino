@@ -12,7 +12,7 @@ Servo servo2;
 Servo servo3;
 
 void setup() {
-    Serial.begin(250000);
+    Serial.begin(115200);
     Serial.println("This program expects 3 integers");
     Serial.println("Enter the angles formated like this (35, -12, 24)  ");
     Serial.println();

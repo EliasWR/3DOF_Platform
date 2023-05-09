@@ -8,33 +8,6 @@ import serial
 import math
 import time
 
-A = np.array([[0, 1, 0, 0],
-              [0, 0, 0, 0],
-              [0, 0, 0, 1],
-              [0, 0, 0, 0]])
-
-B = np.array([[0],
-              [7],
-              [0],
-              [7]])
-
-prev_time = 0
-phat_x_prev = 0
-vhat_x_prev = 0
-phat_y_prev = 0
-vhat_y_prev = 0
-p_x_prev = 0
-p_y_prev = 0
-u_p_prev = 0
-u_r_prev = 0
-x_ref = 0
-y_ref = 0
-
-# Controller gains
-L1 = 11.8
-L2 = -100
-K1 = 14.28
-K2 = 1.68
 
 class PID():
 
@@ -77,7 +50,7 @@ For running both programs simultaneously we can use multithreading or multiproce
 """
 
 # PHYSICAL CONSTANTS
-L = 220  # Distance between two servo attachement points to platform
+L = 220  # Distance between two servos
 r = 40  # Length of servo shaft
 s = 15  # Length of actuator leg
 d = 0   # Offset in Y direction
@@ -94,10 +67,10 @@ all_angle = 0
 platform_roll_angle = 0
 platform_pitch_angle = 0
 
-PLATFORM_ROLL_LOW_LIM = -5
-PLATFORM_ROLL_HIGH_LIM = 5
-PLATFORM_PITCH_LOW_LIM = -5
-PLATFORM_PITCH_HIGH_LIM = 5
+PLATFORM_ROLL_LOW_LIM = -10
+PLATFORM_ROLL_HIGH_LIM = 10
+PLATFORM_PITCH_LOW_LIM = -10
+PLATFORM_PITCH_HIGH_LIM = 10
 
 # Set a limit to upto which you want to rotate the servos (You can do it according to your needs)
 servo1_angle_limit_positive = 10
@@ -109,9 +82,9 @@ servo2_angle_limit_negative = -70
 servo3_angle_limit_positive = 10
 servo3_angle_limit_negative = -70
 
-Kp = 0.4
+Kp = 1
 Ki = 0
-Kd = 0.2
+Kd = 0
 
 PID_servo1 = PID(Kp, Ki, Kd)
 PID_servo2 = PID(Kp, Ki, Kd)
@@ -132,10 +105,12 @@ def limit(in_val, min, max):
 
 def ball_track(key1, queue):
     camera_port = 0
-    cap = cv2.VideoCapture(camera_port,cv2.CAP_DSHOW)
+    cap = cv2.VideoCapture(camera_port)
     cap.set(3, 1280)
     cap.set(4, 720)
 
+    get, img = cap.read()
+    h, w, _ = img.shape
 
     if key1:
         print('Ball tracking is initiated')
@@ -146,17 +121,14 @@ def ball_track(key1, queue):
 
     center_point = [626, 337, 2210] # center point of the plate, calibrated
 
-    center = (center_point[0], center_point[1])
-    radius = 300
-
-    angle = 5  # Specify the angle of rotation in degrees
-
-    # Define the rotation matrix
-    M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1)
 
     while True:
+        start_time = time.time() # start recording the cycle time
+
         get, img = cap.read()
-        img = cv2.warpAffine(img, M, (w, h))
+
+        center = (center_point[0], center_point[1])
+        radius = 300
 
         mask = np.zeros_like(img)
         cv2.circle(mask, center, radius, (255, 255, 255), -1)
@@ -168,27 +140,24 @@ def ball_track(key1, queue):
         imgContour, countours = cvzone.findContours(masked_img, mask)
 
         if countours:
-            '''
+
             data = round((countours[0]['center'][0] - center_point[0]) / 10), \
                    round((h - countours[0]['center'][1] - center_point[1]) / 10), \
                    round(int(countours[0]['area'] - center_point[2])/100)
-            '''
 
-            '''
-            # Times 0.5 to go from pixels to mm
-            data = 0.5 * round((countours[0]['center'][0] - center_point[0])), \
-                   0.5 * round((h - countours[0]['center'][1] - center_point[1])), \
-                   round(int(countours[0]['area'] - center_point[2])/100)
-            '''
+            queue.put(data)
             #print("The got coordinates for the ball are :", data)
         else:
             data = 'nil' # returns nil if we cant find the ball
-            
+            queue.put(data)
 
-        queue.put(data)
         imgStack = cvzone.stackImages([imgContour], 1, 1)
         # imgStack = cvzone.stackImages([img,imgColor, mask, imgContour],2,0.5) #use for calibration and correction
         cv2.imshow("Image", imgStack)
+
+        end_time = time.time() # stop recording the cycle time
+        cycle_time = end_time - start_time # calculate the cycle time
+        print(f"Ball tracking cycle time: {cycle_time} seconds") # print the cycle time
 
         cv2.waitKey(1)
 
@@ -197,7 +166,7 @@ def servo_control(key2, queue):
     #port_id = 'COM7'        
     port_id = '/dev/cu.usbmodem1101'
     # initialise serial interface
-    arduino = serial.Serial(port=port_id, baudrate=115200, timeout=0.1)
+    arduino = serial.Serial(port=port_id, baudrate=250000, timeout=0.1)
     if key2:
         print('Servo controls are initiated')
 
@@ -215,20 +184,13 @@ def servo_control(key2, queue):
         """
         Here in this function we get both coordinate and servo control, it is an ideal place to implement the controller
         """
-        global prev_time
-        current_time = time.time()
-        delta_t = current_time-prev_time
-
         corrd_info = queue.get()
-
 
         if corrd_info == 'nil': # Checks if the output is nil
             print('Cannot find the ball :(')
-            #None == None
-        
         else:
-            #print(f'The position of the ball : [{corrd_info[0]}, {corrd_info[1]}]')
-            '''
+            print(f'The position of the ball : [{corrd_info[0]}, {corrd_info[1]}]')
+
             # PID
 
 
@@ -246,77 +208,8 @@ def servo_control(key2, queue):
             if use_gui_angles:
                 roll_angle = platform_roll_angle
                 pitch_angle = platform_pitch_angle
-            '''
 
-            # Observer LQR
-
-            # Calculate the state estimate using the observer
-
-            global phat_x_prev, vhat_x_prev, phat_y_prev, vhat_y_prev, L1, L2, K1, K2, p_x_prev, p_y_prev, x_ref, y_ref, u_r_prev, u_p_prev
-
-            p_x = corrd_info[0]
-            p_y = corrd_info[1]
-
-
-            # Calculate estimates
-            a_x = 7*u_r_prev
-            a_y = 7*u_p_prev
-            phat_x = phat_x_prev + delta_t*(vhat_x_prev) + L1*(p_x_prev - phat_x_prev)
-            vhat_x = vhat_x_prev + delta_t*(a_x) + L2*(p_x_prev - phat_x_prev)
-            phat_y = phat_y_prev + delta_t*(vhat_y_prev) + L1*(p_y_prev - phat_y_prev)
-            vhat_y = vhat_y_prev + delta_t*(a_y) + L2*(p_y_prev - phat_y_prev)
-
-
-            print(p_x, p_y)
-
-            #'''----------
-            # High pass (Oppgave 3B)
-            f_c = 10 # hz
-            T = 1/(2*math.pi*f_c)
-            vhat_x = (1- delta_t/T)*vhat_x_prev + (p_x - p_x_prev)/T
-            vhat_y = (1- delta_t/T)*vhat_y_prev + (p_y - p_y_prev)/T
-            #-----------'''
-
-
-            '''
-            # Vei-fart-tid (Oppgave 3A) 
-            vhat_x = (p_x - p_x_prev)/delta_t
-            vhat_y = (p_y - p_y_prev)/delta_t
-            '''
-            print(phat_x, vhat_x, phat_y, vhat_y)
-
-            # Calculate the control input using the LQR controller
-            u_r = -K1*(p_x-x_ref) - K2*vhat_x
-            u_p = -K1*(p_y-y_ref) - K2*vhat_y
-            print(f"Raw u: {u_r}, {u_p}")
-
-                    
-            roll_angle = math.degrees(u_r)
-            pitch_angle = math.degrees(u_p)
-
-            roll_angle = limit(roll_angle, PLATFORM_ROLL_LOW_LIM, PLATFORM_ROLL_HIGH_LIM)
-            pitch_angle = limit(pitch_angle, PLATFORM_PITCH_LOW_LIM, PLATFORM_PITCH_HIGH_LIM)
-
-            print(f'Platform: [{roll_angle}, {pitch_angle}]')
-
-            roll_angle = math.radians(roll_angle)
-            pitch_angle = math.radians(pitch_angle)
-            
-            u_r_prev = roll_angle
-            u_p_prev = pitch_angle
-
-            # Update previous values
-            phat_x_prev = phat_x
-            vhat_x_prev = vhat_x
-            phat_y_prev = phat_y
-            vhat_y_prev = vhat_y
-            p_x_prev = p_x
-            p_y_prev = p_y
-            prev_time = current_time
-
-
-
-            
+            print(f'Platform angles are : [{roll_angle}, {pitch_angle}]')
             
 
             # Calculate Z-position for each servo.
@@ -326,7 +219,7 @@ def servo_control(key2, queue):
             z_S2 = ((math.sqrt(3)*L/6 + d)*math.sin(pitch_angle)*math.cos(roll_angle) - L/2*math.sin(roll_angle))
             z_S3 = ((-math.sqrt(3)*L/3 + d)*math.sin(pitch_angle)*math.cos(roll_angle))
 
-            print(f'Z-values: [{z_S1}, {z_S2}, {z_S3}]')
+            print(f'Z-values are: [{z_S1}, {z_S2}, {z_S3}]')
 
 
             #Approximate each servo angle based on the calculated z-offset
@@ -344,12 +237,9 @@ def servo_control(key2, queue):
             ang3 = limit(ang3, servo3_angle_limit_negative, servo3_angle_limit_positive)
 
             all_angle_assign(ang1, ang2, ang3)
-
-
         
-
     def write_arduino(data):
-        print('Servo angles: ', data)
+        print('The angles send to the arduino : ', data)
 
         arduino.write(bytes(data, 'utf-8'))
 
@@ -361,13 +251,17 @@ def servo_control(key2, queue):
         angles: tuple = (round(math.degrees(ang1), 1),
                          round(math.degrees(ang2), 1),
                          round(math.degrees(ang3), 1))
-
+        
         write_arduino(str(angles))
 
 
 
     while key2:
+        start_time = time.time()
         writeCoord()
+        end_time = time.time() # stop recording the cycle time
+        cycle_time = end_time - start_time # calculate the cycle time
+        print(f"Servo cycle time: {cycle_time} seconds") # print the cycle time
 
     
     #root.mainloop()  # running loop
@@ -382,8 +276,3 @@ if __name__ == '__main__':
     p2.start()
     p1.join()
     p2.join()
-
-
-# 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
-
-# Write some coordinates to a queue in one thread, and read the same data in another thread

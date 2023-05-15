@@ -7,7 +7,12 @@ import cv2
 import serial
 import math
 import time
+from collections import deque
 
+
+MAX_LINE_POINTS = 100
+points_ref = deque(maxlen=MAX_LINE_POINTS)
+points_act = deque(maxlen=MAX_LINE_POINTS)
 
 prev_time = time.time()
 prev_time_cv = time.time()
@@ -146,7 +151,7 @@ def ball_track(key1, queue):
     center = (center_point[0], center_point[1])
     radius = 300
 
-    angle = 5  # Specify the angle of rotation in degrees
+    angle = 18  # Specify the angle of rotation in degrees
 
     # Define the rotation matrix
     M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1)
@@ -170,8 +175,8 @@ def ball_track(key1, queue):
 
         if countours:
             
-            data = round((countours[0]['center'][0] - center_point[0]) / 10), \
-                   round((h - countours[0]['center'][1] - center_point[1]) / 10), \
+            data = round((countours[0]['center'][0] - center_point[0])), \
+                   round((h - countours[0]['center'][1] - center_point[1])), \
                    round(int(countours[0]['area'] - center_point[2])/100)
             
 
@@ -183,12 +188,34 @@ def ball_track(key1, queue):
             '''
             #print("The got coordinates for the ball are :", data)
         else:
-            data = 'nil' # returns nil if we cant find the ball
-            
+            data = (None, None, None) # returns nil if we cant find the ball
+        
 
         queue.put(data)
-        imgStack = cvzone.stackImages([imgContour], 1, 1)
+        
         # imgStack = cvzone.stackImages([img,imgColor, mask, imgContour],2,0.5) #use for calibration and correction
+        
+        if data[0] is None:
+            continue
+        
+        global points_act
+        points_act.appendleft((data[0]+center_point[0], h-data[1]-center_point[1]))
+        points_ref.appendleft((x_ref, y_ref))
+
+        # loop over the set of tracked points
+        for i in range(1, len(points_act)):
+            # if either of the tracked points are None, ignore
+            # them
+            if points_act[i - 1] is None or points_act[i] is None:
+                continue
+
+            print(points_act[i - 1], points_act[i])    
+            # otherwise, compute the thickness of the line and
+            # draw the connecting lines
+            thickness =  5# int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
+            cv2.line(imgContour, points_act[i - 1], points_act[i], (0, 0, 255), thickness)
+
+        imgStack = cvzone.stackImages([imgContour], 1, 1)
         cv2.imshow("Image", imgStack)
 
 
@@ -225,7 +252,7 @@ def servo_control(key2, queue):
         corrd_info = queue.get()
 
 
-        if corrd_info == 'nil': # Checks if the output is nil
+        if corrd_info == (None, None, None): # Checks if the output is nil
             print('Cannot find the ball :(')
             #None == None
         
@@ -259,6 +286,10 @@ def servo_control(key2, queue):
 
             p_x = corrd_info[0]
             p_y = corrd_info[1]
+            
+            
+
+            
 
 
             # Calculate estimates

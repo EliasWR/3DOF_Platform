@@ -1,8 +1,3 @@
-# Rydde i kode
-# Flytte setpunkt til midten
-# Tracking på ballen
-# f_c kan være 12.5% av delta_t
-
 import multiprocessing as mp
 import numpy as np
 from multiprocessing import Queue
@@ -12,6 +7,7 @@ import cv2
 import serial
 import math
 import time
+from collections import deque
 
 # ==============================PID CLASS==============================
 class PID():
@@ -57,8 +53,8 @@ angle_increment = 0.5       # 1.5
 # Controller gains
 L1 = 11.8
 L2 = -100
-K1 = 0.1 #0.01
-K2 = 0.3
+K1 = 0.01 #0.01
+K2 = 0.03
 
 # PHYSICAL CONSTANTS
 L = 220  # Distance between two servo attachement points to platform
@@ -113,6 +109,11 @@ servo2_angle_limit_negative = -70
 servo3_angle_limit_positive = 10
 servo3_angle_limit_negative = -70
 
+# Ball line tracking
+MAX_LINE_POINTS = 100
+points_ref = deque(maxlen=MAX_LINE_POINTS)
+points_act = deque(maxlen=MAX_LINE_POINTS)
+
 # PID objects
 PID_servo1 = PID(Kp, Ki, Kd)
 PID_servo2 = PID(Kp, Ki, Kd)
@@ -166,16 +167,17 @@ def ball_track(key1, queue):
 
         angle = current_time_cv*angle_increment
         
+        global x_ref, y_ref
         # Shape of a circle
-        #x = int(x_ref+radius_setpoint*math.cos(angle))
-        #y = int(y_ref+radius_setpoint*math.sin(angle))
+        x_ref = int(radius_setpoint*math.cos(angle) + center_point[0])
+        y_ref = int(radius_setpoint*math.sin(angle) + center_point[1])
         
         # Shape of the number eight
         #x = int(x_ref + radius_setpoint/2 * math.cos(angle)) + int(radius_setpoint/2 * math.cos(2 * angle))
         #y = int(y_ref + radius_setpoint/2 * math.sin(angle)) + int(radius_setpoint/2 * math.sin(2 * angle))
         
-        x = 0
-        y = 0
+        #x = 0
+        #y = 0
         
         mask = np.zeros_like(img)
         cv2.circle(mask, center, radius, (255, 255, 255), -1)
@@ -184,14 +186,35 @@ def ball_track(key1, queue):
         imgContour, countours = cvzone.findContours(masked_img, mask)
 
         if countours:
-            data = round((countours[0]['center'][0] - center_point_setpoint[0] + x) / 10), \
-                   round((h - countours[0]['center'][1] - center_point_setpoint[1] + y) / 10), \
+            data = round((countours[0]['center'][0] - center_point_setpoint[0])), \
+                   round((h - countours[0]['center'][1] - center_point_setpoint[1])), \
                    round(int(countours[0]['area'] - center_point_setpoint[2])/100)
             #print("The got coordinates for the ball are :", data)
         else:
-            data = 'nil' # returns nil if we cant find the ball
+            data = (None, None, None) # returns nil if we cant find the ball
             
         queue.put(data)
+        
+        if data[0] is not None:
+            global points_act
+            points_act.appendleft((data[0]+center_point[0], h-data[1]-center_point[1]))
+        
+            points_ref.appendleft((x_ref, y_ref))
+
+            # loop over the set of tracked points
+            for i in range(1, len(points_act)):
+                # if either of the tracked points are None, ignore
+                # them
+                if points_act[i - 1] is None or points_act[i] is None:
+                    continue
+
+                print(points_act[i - 1], points_act[i])    
+                # otherwise, compute the thickness of the line and
+                # draw the connecting lines
+                thickness =  5# int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
+                cv2.line(imgContour, points_act[i - 1], points_act[i], (0, 0, 255), thickness)
+                cv2.line(imgContour, points_ref[i - 1], points_ref[i], (0, 255, 0), thickness)
+        
         imgStack = cvzone.stackImages([imgContour], 1, 1)
         # imgStack = cvzone.stackImages([img,imgColor, mask, imgContour],2,0.5) #use for calibration and correction
         cv2.imshow("Image", imgStack)
@@ -222,7 +245,7 @@ def servo_control(key2, queue):
         corrd_info = queue.get()
 
 
-        if corrd_info == 'nil': # Checks if the output is nil
+        if corrd_info == (None, None, None): # Checks if the output is nil
             print('Cannot find the ball :(')
             #None == None
         

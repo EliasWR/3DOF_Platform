@@ -195,25 +195,24 @@ def ball_track(key1, queue):
         
         # imgStack = cvzone.stackImages([img,imgColor, mask, imgContour],2,0.5) #use for calibration and correction
         
-        if data[0] is None:
-            continue
+        if data[0] is not None:
+            global points_act
+            points_act.appendleft((data[0]+center_point[0], h-data[1]-center_point[1]))
         
-        global points_act
-        points_act.appendleft((data[0]+center_point[0], h-data[1]-center_point[1]))
-        points_ref.appendleft((x_ref, y_ref))
+            points_ref.appendleft((x_ref, y_ref))
 
-        # loop over the set of tracked points
-        for i in range(1, len(points_act)):
-            # if either of the tracked points are None, ignore
-            # them
-            if points_act[i - 1] is None or points_act[i] is None:
-                continue
+            # loop over the set of tracked points
+            for i in range(1, len(points_act)):
+                # if either of the tracked points are None, ignore
+                # them
+                if points_act[i - 1] is None or points_act[i] is None:
+                    continue
 
-            print(points_act[i - 1], points_act[i])    
-            # otherwise, compute the thickness of the line and
-            # draw the connecting lines
-            thickness =  5# int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
-            cv2.line(imgContour, points_act[i - 1], points_act[i], (0, 0, 255), thickness)
+                print(points_act[i - 1], points_act[i])    
+                # otherwise, compute the thickness of the line and
+                # draw the connecting lines
+                thickness =  5# int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
+                cv2.line(imgContour, points_act[i - 1], points_act[i], (0, 0, 255), thickness)
 
         imgStack = cvzone.stackImages([imgContour], 1, 1)
         cv2.imshow("Image", imgStack)

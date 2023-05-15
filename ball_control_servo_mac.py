@@ -71,9 +71,11 @@ Kp = 0.4
 Ki = 0.1
 Kd = 0.2
 
-# Observer variables
+# Time variables for making shape
 prev_time = time.time()
 prev_time_cv = time.time()
+
+# Observer variables
 phat_x_prev = 0
 vhat_x_prev = 0
 phat_y_prev = 0
@@ -164,8 +166,16 @@ def ball_track(key1, queue):
 
         angle = current_time_cv*angle_increment
         
-        x = int(x_ref+radius_setpoint*math.cos(angle))
-        y = int(y_ref+radius_setpoint*math.sin(angle))
+        # Shape of a circle
+        #x = int(x_ref+radius_setpoint*math.cos(angle))
+        #y = int(y_ref+radius_setpoint*math.sin(angle))
+        
+        # Shape of the number eight
+        #x = int(x_ref + radius_setpoint/2 * math.cos(angle)) + int(radius_setpoint/2 * math.cos(2 * angle))
+        #y = int(y_ref + radius_setpoint/2 * math.sin(angle)) + int(radius_setpoint/2 * math.sin(2 * angle))
+        
+        x = 0
+        y = 0
         
         mask = np.zeros_like(img)
         cv2.circle(mask, center, radius, (255, 255, 255), -1)
@@ -189,7 +199,7 @@ def ball_track(key1, queue):
 
 
 def servo_control(key2, queue):       
-    port_id = '/dev/cu.usbmodem1101'
+    port_id =  '/dev/cu.usbmodem11101' # '/dev/cu.usbmodem1101'
     arduino = serial.Serial(port=port_id, baudrate=115200, timeout=0.1)
     if key2:
         print('Servo controls are initiated')

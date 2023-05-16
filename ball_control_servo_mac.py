@@ -47,14 +47,19 @@ class PID():
 For running both programs simultaneously we can use multithreading or multiprocessing
 """
 # Parameters for setpoint pattern
-radius_setpoint = 170       # 100
-angle_increment = 0.5       # 1.5
+radius_setpoint = 125
+angle_increment = 2.6
 
 # Controller gains
 L1 = 11.8
 L2 = -100
-K1 = 0.01 #0.01
-K2 = 0.03
+K1 = 0.025                   # 0.025
+K2 = 0.025                   # 0.025
+
+
+# Regulering til midten
+# K1 = 0.015
+# K2 = 0.03
 
 # PHYSICAL CONSTANTS
 L = 220  # Distance between two servo attachement points to platform
@@ -110,9 +115,10 @@ servo3_angle_limit_positive = 10
 servo3_angle_limit_negative = -70
 
 # Ball line tracking
-MAX_LINE_POINTS = 100
-points_ref = deque(maxlen=MAX_LINE_POINTS)
-points_act = deque(maxlen=MAX_LINE_POINTS)
+MAX_LINE_POINTS_BALL = 300
+MAX_LINE_POINTS_REF = 40
+points_ref = deque(maxlen=MAX_LINE_POINTS_REF)
+points_act = deque(maxlen=MAX_LINE_POINTS_BALL)
 
 # PID objects
 PID_servo1 = PID(Kp, Ki, Kd)
@@ -149,7 +155,6 @@ def ball_track(key1, queue):
     center_point = [600, 336, 2210] # center point of the plate, calibrated
     center_point_setpoint = [580, 390, 2210]
 
-
     center = (center_point[0], center_point[1])
     radius = 300
     angle = 18  # Specify the angle of rotation in degrees
@@ -164,20 +169,11 @@ def ball_track(key1, queue):
         #print(delta_t)
         get, img = cap.read()
         img = cv2.warpAffine(img, M, (w, h))
-
-        angle = current_time_cv*angle_increment
         
-        global x_ref, y_ref
-        # Shape of a circle
+        angle = current_time_cv*angle_increment
+
         x_ref = int(radius_setpoint*math.cos(angle) + center_point[0])
         y_ref = int(radius_setpoint*math.sin(angle) + center_point[1])
-        
-        # Shape of the number eight
-        #x = int(x_ref + radius_setpoint/2 * math.cos(angle)) + int(radius_setpoint/2 * math.cos(2 * angle))
-        #y = int(y_ref + radius_setpoint/2 * math.sin(angle)) + int(radius_setpoint/2 * math.sin(2 * angle))
-        
-        #x = 0
-        #y = 0
         
         mask = np.zeros_like(img)
         cv2.circle(mask, center, radius, (255, 255, 255), -1)
@@ -197,7 +193,7 @@ def ball_track(key1, queue):
         
         if data[0] is not None:
             global points_act
-            points_act.appendleft((data[0]+center_point[0], h-data[1]-center_point[1]))
+            points_act.appendleft((data[0]+center_point_setpoint[0], h-data[1]-center_point_setpoint[1]))
         
             points_ref.appendleft((x_ref, y_ref))
 
@@ -208,13 +204,18 @@ def ball_track(key1, queue):
                 if points_act[i - 1] is None or points_act[i] is None:
                     continue
 
-                print(points_act[i - 1], points_act[i])    
+                #print(points_act[i - 1], points_act[i])    
                 # otherwise, compute the thickness of the line and
                 # draw the connecting lines
                 thickness =  5# int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
                 cv2.line(imgContour, points_act[i - 1], points_act[i], (0, 0, 255), thickness)
+            
+            for i in range (1, len(points_ref)):
+                if points_ref[i - 1] is None or points_ref[i] is None:
+                    continue
+                thickness =  5
                 cv2.line(imgContour, points_ref[i - 1], points_ref[i], (0, 255, 0), thickness)
-        
+                
         imgStack = cvzone.stackImages([imgContour], 1, 1)
         # imgStack = cvzone.stackImages([img,imgColor, mask, imgContour],2,0.5) #use for calibration and correction
         cv2.imshow("Image", imgStack)
@@ -275,7 +276,15 @@ def servo_control(key2, queue):
             # Calculate the state estimate using the observer
 
             global phat_x_prev, vhat_x_prev, phat_y_prev, vhat_y_prev, L1, L2, K1, K2, p_x_prev, p_y_prev, x_ref, y_ref, u_r_prev, u_p_prev
-
+            
+            global x_ref, y_ref
+            
+            angle = current_time*angle_increment
+            #center_point = [580, 390, 2210]
+            # Shape of a circle
+            x_ref = int(radius_setpoint*math.cos(angle))
+            y_ref = int(radius_setpoint*math.sin(angle))
+            
             p_x = corrd_info[0]
             p_y = corrd_info[1]
 
@@ -308,7 +317,7 @@ def servo_control(key2, queue):
             u_r = -K1*(p_x-x_ref) - K2*vhat_x
             u_p = -K1*(p_y-y_ref) - K2*vhat_y
             #print(f"Raw u: {u_r}, {u_p}")
-
+            #print (f"u_r = {u_r}\n u_p = {u_p} x_ref = {x_ref} y_ref = {y_ref}")
                     
             roll_angle = u_r  #math.degrees(u_r)
             pitch_angle = u_p #math.degrees(u_p)
@@ -360,7 +369,7 @@ def servo_control(key2, queue):
             all_angle_assign(ang1, ang2, ang3)
 
     def write_arduino(data):
-        print('Servo angles: ', data)
+        #print('Servo angles: ', data)
 
         arduino.write(bytes(data, 'utf-8'))
 

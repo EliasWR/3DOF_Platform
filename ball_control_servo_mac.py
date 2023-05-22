@@ -47,19 +47,27 @@ class PID():
 For running both programs simultaneously we can use multithreading or multiprocessing
 """
 # Parameters for setpoint pattern
-radius_setpoint = 125
-angle_increment = 2.6
+radius_setpoint = 127
+angle_increment = 2.7
 
 # Controller gains
 L1 = 11.8
 L2 = -100
-K1 = 0.025                   # 0.025
-K2 = 0.025                   # 0.025
 
+shape = 3 # 1 for circle, 2 for square, 3 for point
+if shape == 1:
+    # Sirkelregulering
+    K1 = 0.037      #0.025 #0.025 #0.035
+    K2 = 0.021      #0.025 #0.025 #0.021
+elif shape == 2:
+    # Regulering firkant
+    K1 = 0.03 # 0.02
+    K2 = 0.025 # 0.02
+elif shape == 3:
+    # Regulering til midten
+    K1 = 0.015
+    K2 = 0.02
 
-# Regulering til midten
-# K1 = 0.015
-# K2 = 0.03
 
 # PHYSICAL CONSTANTS
 L = 220  # Distance between two servo attachement points to platform
@@ -73,6 +81,8 @@ Ki = 0.1
 Kd = 0.2
 
 # Time variables for making shape
+previous_time = time.time()
+reference = 1
 prev_time = time.time()
 prev_time_cv = time.time()
 
@@ -105,7 +115,7 @@ PLATFORM_PITCH_LOW_LIM = -13
 PLATFORM_PITCH_HIGH_LIM = 13
 
 # Constraints of servo
-servo1_angle_limit_positive = 13
+servo1_angle_limit_positive = 10
 servo1_angle_limit_negative = -70
 
 servo2_angle_limit_positive = 10
@@ -115,8 +125,8 @@ servo3_angle_limit_positive = 10
 servo3_angle_limit_negative = -70
 
 # Ball line tracking
-MAX_LINE_POINTS_BALL = 300
-MAX_LINE_POINTS_REF = 40
+MAX_LINE_POINTS_BALL = 600
+MAX_LINE_POINTS_REF = 500
 points_ref = deque(maxlen=MAX_LINE_POINTS_REF)
 points_act = deque(maxlen=MAX_LINE_POINTS_BALL)
 
@@ -152,29 +162,69 @@ def ball_track(key1, queue):
     myColorFinder = ColorFinder(False)  # if you want to find the color and calibrate the program we use this *(Debugging)
     hsvVals = {'hmin': 58, 'smin': 31, 'vmin': 100, 'hmax': 162, 'smax': 255, 'vmax': 255} # Green
 
+    #hsvVals = {'hmin': 0, 'smin': 0, 'vmin': 158, 'hmax': 255, 'smax': 255, 'vmax': 255} # White
+
     center_point = [600, 336, 2210] # center point of the plate, calibrated
     center_point_setpoint = [580, 390, 2210]
 
     center = (center_point[0], center_point[1])
-    radius = 300
+    radius = 290
     angle = 18  # Specify the angle of rotation in degrees
 
     # Define the rotation matrix
     M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1)
 
+    x_ref = 0 
+    y_ref = 0
+
     while True:
         current_time_cv = time.time()
         delta_t = current_time_cv - prev_time_cv
         prev_time_cv = current_time_cv
-        #print(delta_t)
         get, img = cap.read()
         img = cv2.warpAffine(img, M, (w, h))
         
         angle = current_time_cv*angle_increment
 
-        x_ref = int(radius_setpoint*math.cos(angle) + center_point[0])
-        y_ref = int(radius_setpoint*math.sin(angle) + center_point[1])
+        # Draw circle
         
+        #y_ref = center_point[1]
+        
+        # Drawing square line
+        global prev_time, previous_time, reference
+        
+        # Deciding shape
+        if shape == 1:
+            # Sirkelregulering
+            x_ref = int(radius_setpoint*math.cos(-angle) + center_point[0])
+            y_ref = int(radius_setpoint*math.sin(-angle) + center_point[1])
+        elif shape == 2:
+            # Regulering firkant
+             timer_threshold = 5
+             
+             if current_time_cv - previous_time > timer_threshold:
+                 if reference == 1:
+                     600, 336, 2210
+                     x_ref = 100 + center_point_setpoint[0]
+                     y_ref = -100 + center_point_setpoint[1]
+                     reference = 2
+                 elif reference == 2:
+                     x_ref = 100 + center_point_setpoint[0]
+                     y_ref = 100 + center_point_setpoint[1]
+                     reference = 3
+                 elif reference == 3:
+                     x_ref = -100 + center_point_setpoint[0]
+                     y_ref = 100 + center_point_setpoint[1]
+                     reference = 4
+                 else:
+                     x_ref = -100 + center_point_setpoint[0]
+                     y_ref = -100 + center_point_setpoint[1]
+                     reference = 1
+                 previous_time = current_time_cv
+        elif shape == 3:
+            x_ref = center_point[0]
+            y_ref = center_point[1]
+
         mask = np.zeros_like(img)
         cv2.circle(mask, center, radius, (255, 255, 255), -1)
         masked_img = cv2.bitwise_and(img, mask)
@@ -191,12 +241,26 @@ def ball_track(key1, queue):
             
         queue.put(data)
         
+        # ------------------------------ Drawing green reference line -----------------------------
+        # Reference line drawing
         if data[0] is not None:
             global points_act
-            points_act.appendleft((data[0]+center_point_setpoint[0], h-data[1]-center_point_setpoint[1]))
-        
-            points_ref.appendleft((x_ref, y_ref))
-
+            points_act.appendleft((data[0]+center_point_setpoint[0], h - data[1]-center_point_setpoint[1]))
+            
+            if shape == 1 or shape == 3: # 
+                points_ref.appendleft((x_ref, y_ref))
+            elif shape == 2:
+                points_ref.appendleft((x_ref + 20, h - y_ref))
+                
+            for i in range (1, len(points_ref)):
+                if points_ref[i - 1] is None or points_ref[i] is None:
+                    continue
+                if i == 1:
+                    thickness = 30
+                else:
+                    thickness = 5
+                cv2.line(imgContour, points_ref[i - 1], points_ref[i], (0, 255, 0), thickness)
+            
             # loop over the set of tracked points
             for i in range(1, len(points_act)):
                 # if either of the tracked points are None, ignore
@@ -207,14 +271,8 @@ def ball_track(key1, queue):
                 #print(points_act[i - 1], points_act[i])    
                 # otherwise, compute the thickness of the line and
                 # draw the connecting lines
-                thickness =  5# int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
+                thickness = 5 # int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
                 cv2.line(imgContour, points_act[i - 1], points_act[i], (0, 0, 255), thickness)
-            
-            for i in range (1, len(points_ref)):
-                if points_ref[i - 1] is None or points_ref[i] is None:
-                    continue
-                thickness =  5
-                cv2.line(imgContour, points_ref[i - 1], points_ref[i], (0, 255, 0), thickness)
                 
         imgStack = cvzone.stackImages([imgContour], 1, 1)
         # imgStack = cvzone.stackImages([img,imgColor, mask, imgContour],2,0.5) #use for calibration and correction
@@ -239,9 +297,11 @@ def servo_control(key2, queue):
         """
         Here in this function we get both coordinate and servo control, it is an ideal place to implement the controller
         """
-        global prev_time
+        global prev_time, previous_time, reference
         current_time = time.time()
         delta_t = current_time-prev_time
+        # Setpoint changing
+        timer_threshold = 5
 
         corrd_info = queue.get()
 
@@ -281,9 +341,32 @@ def servo_control(key2, queue):
             
             angle = current_time*angle_increment
             #center_point = [580, 390, 2210]
-            # Shape of a circle
-            x_ref = int(radius_setpoint*math.cos(angle))
-            y_ref = int(radius_setpoint*math.sin(angle))
+            
+            if shape == 1:
+                # Shape of a circle
+                x_ref = int(radius_setpoint*math.cos(angle))
+                y_ref = int(radius_setpoint*math.sin(angle))
+            elif shape == 2:
+                # Shape of square
+                if current_time - previous_time > timer_threshold:
+                    if reference == 1:
+                        600, 336, 2210
+                        x_ref = 100
+                        y_ref = -100
+                        reference = 2
+                    elif reference == 2:
+                        x_ref = 100
+                        y_ref = 100
+                        reference = 3
+                    elif reference == 3:
+                        x_ref = -100
+                        y_ref = 100
+                        reference = 4
+                    else:
+                        x_ref = -100
+                        y_ref = -100
+                        reference = 1
+                    previous_time = current_time
             
             p_x = corrd_info[0]
             p_y = corrd_info[1]
@@ -301,7 +384,7 @@ def servo_control(key2, queue):
 
             #'''----------
             # High pass (Oppgave 3B)
-            f_c = 1 # ((1/delta_t) / 100) * 12 # 1.5 # hz
+            f_c = 2 # ((1/delta_t) / 100) * 12 # 1.5 # hz
             T = 1/(2*math.pi*f_c)
             vhat_x = (1- delta_t/T)*vhat_x_prev + (p_x - p_x_prev)/T
             vhat_y = (1- delta_t/T)*vhat_y_prev + (p_y - p_y_prev)/T
@@ -317,7 +400,7 @@ def servo_control(key2, queue):
             u_r = -K1*(p_x-x_ref) - K2*vhat_x
             u_p = -K1*(p_y-y_ref) - K2*vhat_y
             #print(f"Raw u: {u_r}, {u_p}")
-            #print (f"u_r = {u_r}\n u_p = {u_p} x_ref = {x_ref} y_ref = {y_ref}")
+            #print (f" p_x = {p_x}  p_y= {p_y} x_ref = {x_ref} y_ref = {y_ref} \n ")
                     
             roll_angle = u_r  #math.degrees(u_r)
             pitch_angle = u_p #math.degrees(u_p)

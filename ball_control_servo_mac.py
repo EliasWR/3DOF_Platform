@@ -50,7 +50,7 @@ For running both programs simultaneously we can use multithreading or multiproce
 radius_setpoint = 127
 angle_increment = 2.7
 
-# Observer gains
+# Controller gains
 L1 = 11.8
 L2 = -100
 
@@ -65,8 +65,8 @@ elif shape == 2:
     K2 = 0.025 # 0.02
 elif shape == 3:
     # Regulering til midten
-    K1 = 0.0393    #0.0004 # 0.015
-    K2 = 0.1065#0.0357 # 0.02 
+    K1 = 0.015
+    K2 = 0.02 
 
 
 # PHYSICAL CONSTANTS

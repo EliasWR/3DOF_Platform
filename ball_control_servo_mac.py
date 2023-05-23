@@ -50,7 +50,7 @@ For running both programs simultaneously we can use multithreading or multiproce
 radius_setpoint = 127
 angle_increment = 2.7
 
-# Controller gains
+# Observer gains
 L1 = 11.8
 L2 = -100
 

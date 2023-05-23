@@ -54,18 +54,18 @@ angle_increment = 2.7
 L1 = 11.8
 L2 = -100
 
-shape = 3 # 1 for circle, 2 for square, 3 for point
+shape = 2 # 1 for circle, 2 for square, 3 for point
 if shape == 1:
     # Sirkelregulering
     K1 = 0.037      #0.025 #0.025 #0.035
     K2 = 0.021      #0.025 #0.025 #0.021
 elif shape == 2:
     # Regulering firkant
-    K1 = 0.03 # 0.02
-    K2 = 0.025 # 0.02
+    K1 = 0.030 # 0.02
+    K2 = 0.023 # 0.02
 elif shape == 3:
     # Regulering til midten
-    K1 = 0.015
+    K1 = 0.02
     K2 = 0.02 
 
 
@@ -204,7 +204,6 @@ def ball_track(key1, queue):
              
              if current_time_cv - previous_time > timer_threshold:
                  if reference == 1:
-                     600, 336, 2210
                      x_ref = 100 + center_point_setpoint[0]
                      y_ref = -100 + center_point_setpoint[1]
                      reference = 2
@@ -350,7 +349,6 @@ def servo_control(key2, queue):
                 # Shape of square
                 if current_time - previous_time > timer_threshold:
                     if reference == 1:
-                        600, 336, 2210
                         x_ref = 100
                         y_ref = -100
                         reference = 2
